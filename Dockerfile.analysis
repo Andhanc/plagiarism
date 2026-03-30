@@ -1,0 +1,25 @@
+# Сервис анализа (FastAPI + worker / Qdrant / модели).
+# Сборка из каталога antiplagiarism (рядом с worker.py).
+FROM python:3.11-slim-bookworm
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY worker.py api_server.py init_qdrant_collection.py ./
+COPY docker/analysis-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENV QDRANT_HOST=qdrant
+ENV QDRANT_PORT=6333
+ENV QDRANT_COLLECTION=university_docs
+
+EXPOSE 8765
+
+ENTRYPOINT ["/entrypoint.sh"]

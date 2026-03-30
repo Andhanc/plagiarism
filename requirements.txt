@@ -1,0 +1,11 @@
+python-docx
+sentence-transformers
+transformers
+qdrant-client
+urllib3
+numpy
+langchain-text-splitters
+torch
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+pydantic>=2.0.0

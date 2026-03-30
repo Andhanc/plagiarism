@@ -1,0 +1,76 @@
+version: "3.9"
+
+# Единый запуск Guard + ML (Qdrant + Python API) одной командой:
+#   cd antiplagiarism
+#   docker compose -f docker-compose.server.yml up -d --build
+#
+# Доступ к Guard: http://<server-ip>:3000/login
+# (HTTPS появится только если добавите SSL-конфиг в nginx и откроете 443)
+
+services:
+  # --- ML stack ---
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: antiplag-qdrant
+    restart: unless-stopped
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    # Не обязательно публиковать наружу. Оставлено для отладки.
+    ports:
+      - "6333:6333"
+
+  analysis:
+    build:
+      context: .
+      dockerfile: Dockerfile.analysis
+    container_name: antiplag-analysis
+    restart: unless-stopped
+    depends_on:
+      - qdrant
+    environment:
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: "6333"
+      QDRANT_COLLECTION: university_docs
+      # Опционально защита API:
+      # ANALYSIS_API_KEY: "задайте_длинный_секрет"
+    # Не обязательно публиковать наружу. Guard ходит по внутренней сети Docker.
+    ports:
+      - "8765:8765"
+
+  # --- Guard stack ---
+  guard-app:
+    build:
+      context: ./guard-main
+      dockerfile: Dockerfile
+    container_name: plagiarismguard-app
+    restart: unless-stopped
+    depends_on:
+      - analysis
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      NEXT_TELEMETRY_DISABLED: "1"
+      # Связка с ML: внутри сети Docker имя сервиса = analysis
+      ANALYSIS_SERVICE_URL: "http://analysis:8765"
+      # ANALYSIS_SERVICE_API_KEY: "если включили ANALYSIS_API_KEY на analysis"
+    env_file:
+      - ./guard-main/.env.local
+    volumes:
+      - ./guard-main/data:/app/data
+
+  guard-nginx:
+    image: nginx:alpine
+    container_name: plagiarismguard-nginx
+    restart: unless-stopped
+    depends_on:
+      - guard-app
+    ports:
+      - "3000:3000"
+      # - "443:443"
+    volumes:
+      - ./guard-main/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # - ./guard-main/ssl:/etc/nginx/ssl:ro
+
+volumes:
+  qdrant_storage:
+

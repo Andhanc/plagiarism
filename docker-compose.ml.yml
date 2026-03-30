@@ -1,0 +1,47 @@
+# Стек ML: Qdrant + HTTP API анализа (Python).
+# Запуск из каталога antiplagiarism:
+#   docker network create antiplag  # один раз, если Guard будет в той же сети
+#   docker compose -f docker-compose.ml.yml up -d --build
+#
+# Дальше в Guard задайте:
+#   ANALYSIS_SERVICE_URL=http://analysis:8765
+# (если контейнер Guard в сети antiplag) либо http://<IP_хоста>:8765 при проброшенном порте.
+
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: antiplag-qdrant
+    restart: unless-stopped
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    ports:
+      - "6333:6333"
+    networks:
+      - antiplag
+
+  analysis:
+    build:
+      context: .
+      dockerfile: Dockerfile.analysis
+    container_name: antiplag-analysis
+    restart: unless-stopped
+    depends_on:
+      - qdrant
+    environment:
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: "6333"
+      QDRANT_COLLECTION: university_docs
+      # Опционально защита API:
+      # ANALYSIS_API_KEY: "задайте_длинный_секрет"
+    ports:
+      - "8765:8765"
+    networks:
+      - antiplag
+
+volumes:
+  qdrant_storage:
+
+networks:
+  antiplag:
+    name: antiplag
+    driver: bridge
